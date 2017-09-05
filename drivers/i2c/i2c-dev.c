@@ -40,6 +40,27 @@
 #include <linux/jiffies.h>
 #include <linux/uaccess.h>
 
+#define mt6573_I2C_DATA_PORT		((base) + 0x0000)
+#define mt6573_I2C_SLAVE_ADDR		((base) + 0x0004)
+#define mt6573_I2C_INTR_MASK		((base) + 0x0008)
+#define mt6573_I2C_INTR_STAT		((base) + 0x000c)
+#define mt6573_I2C_CONTROL			((base) + 0x0010)
+#define mt6573_I2C_TRANSFER_LEN	    ((base) + 0x0014)
+#define mt6573_I2C_TRANSAC_LEN	    ((base) + 0x0018)
+#define mt6573_I2C_DELAY_LEN		((base) + 0x001c)
+#define mt6573_I2C_TIMING			((base) + 0x0020)
+#define mt6573_I2C_START			((base) + 0x0024)
+#define mt6573_I2C_FIFO_STAT		((base) + 0x0030)
+#define mt6573_I2C_FIFO_THRESH	    ((base) + 0x0034)
+#define mt6573_I2C_FIFO_ADDR_CLR	((base) + 0x0038)
+#define mt6573_I2C_IO_CONFIG		((base) + 0x0040)
+#define mt6573_I2C_DEBUG			((base) + 0x0044)
+#define mt6573_I2C_HS				((base) + 0x0048)
+#define mt6573_I2C_DEBUGSTAT		((base) + 0x0064)
+#define mt6573_I2C_DEBUGCTRL		((base) + 0x0068)
+
+static struct i2c_driver i2cdev_driver;
+
 /*
  * An i2c_dev represents an i2c_adapter ... an I2C or SMBus master, not a
  * slave (i2c_client) with which messages will be exchanged.  It's coupled
@@ -413,6 +434,19 @@ static long i2cdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct i2c_client *client = file->private_data;
 	unsigned long funcs;
+	
+	u16 loopcnt;
+	u16 testregvalue = 0;
+	u16 readregvalue;
+	u16 statusflag = 0;
+	u16 originalvalue;
+	u32 base;
+	u8 byte[10];
+	u8* virt;
+	dma_addr_t phys;
+	int fifonum;
+	int ret;
+	static int number = 0;
 
 	dev_dbg(&client->adapter->dev, "ioctl, cmd=0x%02x, arg=0x%02lx\n",
 		cmd, arg);
@@ -469,6 +503,943 @@ static long i2cdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		 */
 		client->adapter->timeout = msecs_to_jiffies(arg * 10);
 		break;
+		
+	case I2C_UVVF_REGISTER_N1:
+		if(client->adapter->nr == 0)
+			base = 0xF700B000;
+		else
+			base = 0xF700D000;
+			
+		number++;	
+		printk(KERN_INFO "I2C: Write + Read Register Test.............stress number = %d\n", number);
+			
+		testregvalue = 0x0;
+		for(loopcnt = 0; loopcnt < 2; loopcnt++)
+		{
+			originalvalue = __raw_readl(mt6573_I2C_SLAVE_ADDR);
+			__raw_writel(testregvalue, mt6573_I2C_SLAVE_ADDR);
+			readregvalue = __raw_readl(mt6573_I2C_SLAVE_ADDR);
+			if((readregvalue & 0xff) != (testregvalue & 0xff))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_SLAVE_ADDR fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0xff));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0xff));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_SLAVE_ADDR);
+			
+			originalvalue = __raw_readl(mt6573_I2C_INTR_MASK);
+			__raw_writel(testregvalue, mt6573_I2C_INTR_MASK);
+			readregvalue = __raw_readl(mt6573_I2C_INTR_MASK);
+			if((readregvalue & 0xf) != (testregvalue & 0xf))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_INTR_MASK fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0xf));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0xf));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_INTR_MASK);	
+
+			originalvalue = __raw_readl(mt6573_I2C_CONTROL);
+			__raw_writel(testregvalue, mt6573_I2C_CONTROL);
+			readregvalue = __raw_readl(mt6573_I2C_CONTROL);
+			if((readregvalue & 0x7e) != (testregvalue & 0x7e))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_CONTROL fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0x7e));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0x7e));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_CONTROL);
+			
+			originalvalue = __raw_readl(mt6573_I2C_TRANSFER_LEN);
+			__raw_writel(testregvalue, mt6573_I2C_TRANSFER_LEN);
+			readregvalue = __raw_readl(mt6573_I2C_TRANSFER_LEN);
+			if((readregvalue & 0x1fff) != (testregvalue & 0x1fff))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_TRANSFER_LEN fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0x1fff));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0x1fff));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_TRANSFER_LEN);		
+			
+			originalvalue = __raw_readl(mt6573_I2C_TRANSAC_LEN);
+			__raw_writel(testregvalue, mt6573_I2C_TRANSAC_LEN);
+			readregvalue = __raw_readl(mt6573_I2C_TRANSAC_LEN);
+			if((readregvalue & 0xff) != (testregvalue & 0xff))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_TRANSAC_LEN fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0xff));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0xff));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_TRANSAC_LEN);	
+			
+			originalvalue = __raw_readl(mt6573_I2C_DELAY_LEN);
+			__raw_writel(testregvalue, mt6573_I2C_DELAY_LEN);
+			readregvalue = __raw_readl(mt6573_I2C_DELAY_LEN);
+			if((readregvalue & 0xff) != (testregvalue & 0xff))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_DELAY_LEN fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0xff));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0xff));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_DELAY_LEN);
+			
+			originalvalue = __raw_readl(mt6573_I2C_TIMING);
+			__raw_writel(testregvalue, mt6573_I2C_TIMING);
+			readregvalue = __raw_readl(mt6573_I2C_TIMING);
+			if((readregvalue & 0xf73f) != (testregvalue & 0xf73f))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_TIMING fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0xf73f));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0xf73f));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_TIMING);	
+			
+			originalvalue = __raw_readl(mt6573_I2C_IO_CONFIG);
+			__raw_writel(testregvalue, mt6573_I2C_IO_CONFIG);
+			readregvalue = __raw_readl(mt6573_I2C_IO_CONFIG);
+			if((readregvalue & 0x7) != (testregvalue & 0x7))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_IO_CONFIG fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0x7));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0x7));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_IO_CONFIG);
+			
+			originalvalue = __raw_readl(mt6573_I2C_HS);
+			__raw_writel(testregvalue, mt6573_I2C_HS);
+			readregvalue = __raw_readl(mt6573_I2C_HS);
+			if((readregvalue & 0x7773) != (testregvalue & 0x7773))
+			{
+				statusflag ++;
+				printk(KERN_INFO "I2C: mt6573_I2C_HS fails.\n");
+				printk(KERN_INFO "readregvalue: %x.\n", (readregvalue & 0x7773));
+				printk(KERN_INFO "testregvalue: %x.\n", (testregvalue & 0x7773));
+			}
+			__raw_writel(originalvalue, mt6573_I2C_HS);
+			
+			testregvalue = ~testregvalue;
+		}
+		
+		if(statusflag > 0)
+			return -1;						
+		break;
+	case I2C_UVVF_FASTSPEED_N2:
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+
+			byte[0] = 0x20;
+			byte[1] = 0x02;
+			
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			client->timing = 100;
+
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			msleep(1);
+			
+      byte[0] = 0x20;
+			byte[1] = 0x00;
+      ret = i2c_master_send(client, &byte[0], 1);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST sends command error!! \n");
+      }	
+      
+      ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST reads data error!! \n");
+      }
+
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;
+	case I2C_UVVF_HIGHSPEED_N3:
+			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + Fifo Mode Test.............Stess number = %d\n", number);
+	
+			byte[0] = 0xf4;
+			byte[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG;
+			client->timing = 1000;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			byte[0] = 0xf6;
+			byte[1] = 0x00;
+			ret = i2c_master_send(client, &byte[0], 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			msleep(1);
+
+			ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;
+	case I2C_UVVF_DMA_N4:
+
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + DMA Mode Test.........Stress number =%d\n",number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+			
+			virt[0] = 0x20;
+			virt[1] = 0x04;
+	    client->addr = 0x30 & I2C_MASK_FLAG | I2C_DMA_FLAG;
+	    client->timing = 100;
+		            
+			ret = i2c_master_send(client, phys, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			virt[0] = 0x20;
+			virt[1] = 0x00;
+			ret = i2c_master_send(client, phys, 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+
+			ret = i2c_master_recv(client, phys+1, 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+
+      dma_free_coherent(NULL, 4096, virt, phys);
+			if (ret < 0)
+				return ret;			
+		break;
+		
+	case I2C_UVVF_DMA_N5:
+
+			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + DMA Mode Test.........Stress number =%d\n",number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+			
+			virt[0] = 0xf4;
+			virt[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG | I2C_DMA_FLAG;
+			client->timing = 1000;
+		            
+			ret = i2c_master_send(client, phys, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			virt[0] = 0xf6;
+			virt[1] = 0x00;
+			ret = i2c_master_send(client, phys, 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+
+			ret = i2c_master_recv(client, phys+1, 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+
+      dma_free_coherent(NULL, 4096, virt, phys);
+			if (ret < 0)
+				return ret;			
+		break;
+		
+	case I2C_UVVF_REPEAT_N6:
+ 			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode + Write-Read Mode Test.....Stress number = %d\n", number);
+
+
+			byte[0] = 0x20;
+			byte[1] = 0x06;
+				
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			client->timing = 100;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			client->addr = 0x30 & I2C_MASK_FLAG | I2C_WR_FLAG | I2C_RS_FLAG;
+
+			byte[0] = 0x20;
+			ret = i2c_master_send(client, &byte[0], (1<<8 | 1));
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[0]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;
+		
+	case I2C_UVVF_REPEAT_N7:
+ 			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + DMA Mode + Write-Read Mode Test.....Stress number = %d\n", number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+
+			byte[0] = 0x20;
+			byte[1] = 0x07;
+				
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			client->timing = 100;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			client->addr = 0x30 & I2C_MASK_FLAG | I2C_WR_FLAG | I2C_RS_FLAG | I2C_DMA_FLAG;
+
+			virt[0] = 0x20;
+			ret = i2c_master_send(client, phys, (1<<8 | 1));
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[0]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			dma_free_coherent(NULL, 4096, virt, phys);
+			
+			if (ret < 0)
+				return ret;
+		break;
+
+	case I2C_UVVF_REPEAT_N8:
+ 			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + Fifo Mode + Write-Read Mode Test.....Stress number = %d\n", number);
+
+
+			byte[0] = 0xf4;
+			byte[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG;
+			client->timing = 1000;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			client->addr = 0xee & I2C_MASK_FLAG | I2C_WR_FLAG | I2C_RS_FLAG | I2C_HS_FLAG;
+
+			byte[0] = 0xf6;
+			ret = i2c_master_send(client, &byte[0], (1<<8 | 1));
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[0]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;
+
+	case I2C_UVVF_REPEAT_N9:
+ 			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + DMA Mode + Write-Read Mode Test.....Stress number = %d\n", number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+
+			byte[0] = 0xf4;
+			byte[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG;
+			client->timing = 1000;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			client->addr = 0xee & I2C_MASK_FLAG | I2C_WR_FLAG | I2C_RS_FLAG | I2C_DMA_FLAG | I2C_HS_FLAG;
+
+			virt[0] = 0xf6;
+			ret = i2c_master_send(client, phys, (1<<8 | 1));
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[0]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			dma_free_coherent(NULL, 4096, virt, phys);
+			
+			if (ret < 0)
+				return ret;
+		break;
+	case I2C_UVVF_POLL_N10:
+ 			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode + Write-Read Mode Test.....Stress number = %d\n", number);
+
+
+			byte[0] = 0x20;
+			byte[1] = 0x10;
+				
+			client->addr = 0x30 & I2C_MASK_FLAG | I2C_POLL_FLAG;
+			client->timing = 100;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			client->addr = 0x30 & I2C_MASK_FLAG | I2C_WR_FLAG | I2C_RS_FLAG | I2C_POLL_FLAG;
+
+			byte[0] = 0x20;
+			ret = i2c_master_send(client, &byte[0], (1<<8 | 1));
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[0]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;
+	case I2C_UVVF_POLL_N11:
+
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + DMA Mode Test.........Stress number =%d\n",number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+			
+			virt[0] = 0x20;
+			virt[1] = 0x11;
+	    client->addr = 0x30 & I2C_MASK_FLAG | I2C_DMA_FLAG | I2C_POLL_FLAG;
+	    client->timing = 100;
+		            
+			ret = i2c_master_send(client, phys, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			virt[0] = 0x20;
+			virt[1] = 0x00;
+			ret = i2c_master_send(client, phys, 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+
+			ret = i2c_master_recv(client, phys+1, 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+
+      dma_free_coherent(NULL, 4096, virt, phys);
+			if (ret < 0)
+				return ret;			
+		break;	
+	case I2C_UVVF_POLL_N12:
+			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + Fifo Mode Test.............Stess number = %d\n", number);
+	
+			byte[0] = 0xf4;
+			byte[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG | I2C_POLL_FLAG;
+			client->timing = 1000;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			byte[0] = 0xf6;
+			byte[1] = 0x00;
+			ret = i2c_master_send(client, &byte[0], 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			msleep(1);
+
+			ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;	
+	case I2C_UVVF_POLL_N13:
+
+			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + DMA Mode Test.........Stress number =%d\n",number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+			
+			virt[0] = 0xf4;
+			virt[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG | I2C_DMA_FLAG | I2C_POLL_FLAG;
+			client->timing = 1000;
+		            
+			ret = i2c_master_send(client, phys, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			virt[0] = 0xf6;
+			virt[1] = 0x00;
+			ret = i2c_master_send(client, phys, 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+
+			ret = i2c_master_recv(client, phys+1, 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+
+      dma_free_coherent(NULL, 4096, virt, phys);
+			if (ret < 0)
+				return ret;			
+		break;
+	case I2C_UVVF_FIFO_N14:
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+
+			byte[0] = 0x20;
+			byte[1] = 0x14;
+			
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			client->timing = 100;
+
+			for(fifonum = 1; fifonum < 9; fifonum++)
+			{
+				ret = i2c_master_send(client, byte, fifonum);
+				if (ret < 0) {
+					  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+				}	
+			
+				msleep(1);
+			
+     	  byte[0] = 0x20;
+				byte[1] = 0x00;
+      	ret = i2c_master_send(client, &byte[0], 1);
+      	if (ret < 0) {
+        	  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+      	}	
+      
+      	ret = i2c_master_recv(client, &byte[1], fifonum);
+				printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+      	if (ret < 0) {
+        	  printk(KERN_INFO "I2C:TEST reads data error!! \n");
+      	}
+
+				msleep(1);
+			}
+			if (ret < 0)
+				return ret;
+		break;
+	case I2C_UVVF_TIMING_N15:
+		while(1)
+		{
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+
+			byte[0] = 0x20;
+			byte[1] = 0x15;
+			
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			client->timing = 100;
+
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			msleep(1);
+			
+      byte[0] = 0x20;
+			byte[1] = 0x00;
+      ret = i2c_master_send(client, &byte[0], 1);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST sends command error!! \n");
+      }	
+      
+      ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST reads data error!! \n");
+      }
+
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		}
+		break;
+		
+	case I2C_UVVF_TIMING_N16:
+		while(1)
+		{
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+
+			byte[0] = 0x20;
+			byte[1] = 0x16;
+			
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			client->timing = 400;
+
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			msleep(1);
+			
+      byte[0] = 0x20;
+			byte[1] = 0x00;
+      ret = i2c_master_send(client, &byte[0], 1);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST sends command error!! \n");
+      }	
+      
+      ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST reads data error!! \n");
+      }
+
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		}
+		break;
+	case I2C_UVVF_TIMING_N17:
+		while(1)
+		{
+			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + Fifo Mode Test.............Stess number = %d\n", number);
+	
+			byte[0] = 0xf4;
+			byte[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG;
+			client->timing = 400;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			byte[0] = 0xf6;
+			byte[1] = 0x00;
+			ret = i2c_master_send(client, &byte[0], 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			msleep(1);
+
+			ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		}
+		break;
+	case I2C_UVVF_TIMING_N18:
+		while(1)
+		{
+			number++;
+			printk(KERN_INFO "I2C: High Speed Mode + Fifo Mode Test.............Stess number = %d\n", number);
+	
+			byte[0] = 0xf4;
+			byte[1] = 0x2e;
+	    client->addr = 0xee & I2C_MASK_FLAG | I2C_HS_FLAG;
+			client->timing = 1000;
+	
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+				
+			msleep(1);
+				
+			byte[0] = 0xf6;
+			byte[1] = 0x00;
+			ret = i2c_master_send(client, &byte[0], 1);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			msleep(1);
+
+			ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+			if (ret < 0) {
+			   printk(KERN_INFO "I2C:TEST reads data error!! \n");
+			}
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		}
+		break;
+		
+	case I2C_UVVF_CON_N19:
+		
+		while(1)
+		{
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode + Multi Transac Mode Test....Stress number =%d\n", number);	
+
+			byte[0] = 0x20;
+			byte[1] = 0x19;
+			byte[2] = 0x21;
+			byte[3] = 0x19;
+
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			
+			client->timing = (4<<12 | 100);
+
+			ret = i2c_master_send(client, byte, (2<<8 | 2));
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			ret = i2c_master_recv(client, byte, (2<<8 | 2));
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			if (ret < 0)
+				return ret;
+		}
+		break;
+		
+	case I2C_UVVF_CON_N20:
+		while(1)
+		{
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode + Multi Transac Mode Test....Stress number =%d\n", number);	
+
+			byte[0] = 0x20;
+			byte[1] = 0x20;
+			byte[2] = 0x21;
+			byte[3] = 0x20;
+
+		
+			number = 0;
+			client->addr = 0x30 & I2C_MASK_FLAG;
+			
+			client->timing = (8<<12 | 100);
+
+			ret = i2c_master_send(client, byte, (2<<8 | 2));
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			ret = i2c_master_recv(client, byte, (2<<8 | 2));
+			if (ret < 0) {
+				  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			if (ret < 0)
+				return ret;
+		}
+		break;
+		
+	case I2C_UVVF_CLKEN_N21:
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+		
+			client->addr = 0x1e & I2C_MASK_FLAG | I2C_ENEXT_FLAG;
+			client->timing = 100;
+
+      byte[0] = 0x0f;
+			byte[1] = 0x21;
+      ret = i2c_master_send(client, &byte[0], 1);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST sends command error!! \n");
+      }	
+
+      ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST reads data error!! \n");
+      }
+
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;	
+		
+	case I2C_UVVF_CLKEN_N22:
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+			
+			client->addr = 0x1e & I2C_MASK_FLAG;
+			client->timing = 100;
+			
+      byte[0] = 0x0f;
+			byte[1] = 0x22;
+      ret = i2c_master_send(client, &byte[0], 1);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST sends command error!! \n");
+      }	
+
+      ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+      if (ret < 0) {
+          printk(KERN_INFO "I2C:TEST reads data error!! \n");
+      }
+
+			msleep(1);
+			
+			if (ret < 0)
+				return ret;
+		break;
+	case I2C_UVVF_ACKERR_N23:
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + Fifo Mode Test.............stress number = %d\n", number);
+
+			byte[0] = 0x20;
+			byte[1] = 0x23;
+			
+			client->addr = 0xff & I2C_MASK_FLAG;
+			client->timing = 100;
+
+			ret = i2c_master_send(client, byte, 2);
+			if (ret < 0) {
+				 	printk(KERN_INFO "I2C:TEST sends command error!! \n");
+			}	
+			
+			msleep(1);
+			
+     	byte[0] = 0x20;
+			byte[1] = 0x00;
+     	ret = i2c_master_send(client, &byte[0], 1);
+     	if (ret < 0) {
+         	printk(KERN_INFO "I2C:TEST sends command error!! \n");
+     	}	
+      
+     	ret = i2c_master_recv(client, &byte[1], 1);
+			printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, byte[1]);
+     	if (ret < 0) {
+         	printk(KERN_INFO "I2C:TEST reads data error!! \n");
+     	}
+
+			msleep(1);
+
+			if (ret < 0)
+				return ret;
+		break;	
+		
+	case I2C_UVVF_8MORE_N24:
+
+			number++;
+			printk(KERN_INFO "I2C: Fast Speed Mode + DMA Mode Test.........Stress number =%d\n",number);
+			virt = dma_alloc_coherent(NULL, 4096, &phys, GFP_KERNEL); 
+			printk(KERN_INFO "Address: virt = %x, phys = %x\n", virt, phys);
+			
+			virt[0] = 0x20;
+			virt[1] = 0x04;
+	    client->addr = 0x30 & I2C_MASK_FLAG | I2C_DMA_FLAG;
+	    client->timing = 100;
+		  
+		  for(fifonum = 1; fifonum < 256; fifonum++)
+		  {          
+				ret = i2c_master_send(client, phys, fifonum);
+				if (ret < 0) {
+					  printk(KERN_INFO "I2C:TEST sends command error!! \n");
+				}	
+				
+				msleep(1);
+				
+				virt[0] = 0x20;
+				virt[1] = 0x00;
+				ret = i2c_master_send(client, phys, 1);
+				if (ret < 0) {
+			  	 printk(KERN_INFO "I2C:TEST sends command error!! \n");
+				}	
+
+				ret = i2c_master_recv(client, phys+1, fifonum);
+				printk(KERN_INFO "recv ret = %d, read data = 0x%x\n", ret, virt[1]);
+				if (ret < 0) {
+			  	 printk(KERN_INFO "I2C:TEST reads data error!! \n");
+				}
+				msleep(1);
+			}
+
+      dma_free_coherent(NULL, 4096, virt, phys);
+			if (ret < 0)
+				return ret;			
+		break;
+	
 	default:
 		/* NOTE:  returning a fault code here could cause trouble
 		 * in buggy userspace code.  Some old kernel bugs returned

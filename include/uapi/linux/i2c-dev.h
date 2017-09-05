@@ -51,6 +51,30 @@
 #define I2C_PEC		0x0708	/* != 0 to use PEC with SMBus */
 #define I2C_SMBUS	0x0720	/* SMBus transfer */
 
+#define I2C_UVVF_REGISTER_N1 0x0731
+#define I2C_UVVF_FASTSPEED_N2 0x0732
+#define I2C_UVVF_HIGHSPEED_N3 0x0733
+#define I2C_UVVF_DMA_N4 0x0734
+#define I2C_UVVF_DMA_N5 0x0735
+#define I2C_UVVF_REPEAT_N6 0x0736
+#define I2C_UVVF_REPEAT_N7 0x0737
+#define I2C_UVVF_REPEAT_N8 0x0738
+#define I2C_UVVF_REPEAT_N9 0x0739
+#define I2C_UVVF_POLL_N10 0x0740
+#define I2C_UVVF_POLL_N11 0x0741
+#define I2C_UVVF_POLL_N12 0x0742
+#define I2C_UVVF_POLL_N13 0x0743
+#define I2C_UVVF_FIFO_N14 0x0744
+#define I2C_UVVF_TIMING_N15 0x0745
+#define I2C_UVVF_TIMING_N16 0x0746
+#define I2C_UVVF_TIMING_N17 0x0747
+#define I2C_UVVF_TIMING_N18 0x0748
+#define I2C_UVVF_CON_N19 0x0749
+#define I2C_UVVF_CON_N20 0x0750
+#define I2C_UVVF_CLKEN_N21 0x0751
+#define I2C_UVVF_CLKEN_N22 0x0752
+#define I2C_UVVF_ACKERR_N23 0x0753
+#define I2C_UVVF_8MORE_N24 0x0754
 
 /* This is the structure as used in the I2C_SMBUS ioctl call */
 struct i2c_smbus_ioctl_data {

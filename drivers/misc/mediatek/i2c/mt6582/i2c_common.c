@@ -55,7 +55,7 @@ char * get_hexbuffer(char *data_buffer, char *hex_buffer)
   return hex_buffer;
 }
 
-int i2c_trans_data(int bus_id, int address, char *buf, int count, unsigned int ext_flag,int timing,int op)
+int i2c_trans_data(int bus_id, int address, char *buf, int count, unsigned int ext_flag,int timing)
 {
   int ret;
 
@@ -65,18 +65,11 @@ int i2c_trans_data(int bus_id, int address, char *buf, int count, unsigned int e
   if (!adap) return -1;
 
   msg.addr = address;
-  if(0 ==op){
-  	msg.flags = 0;
-  }else if(1==op){
-    msg.flags =I2C_M_RD;
-  }else if(2==op){
-    msg.flags =0;
-  }
-  //msg.flags = ((ext_flag & 0x80000000)?I2C_M_RD:0);
+  msg.flags = ((ext_flag & 0x80000000)?I2C_M_RD:0);
   msg.timing = timing;
   msg.len = count;
   msg.buf = (char *)buf;
-  msg.ext_flag = ext_flag;
+  msg.ext_flag = ext_flag & 0x7FFFFFFF;
 //  msg.ext_flag = (ext_flag & 0x7FFF00FF);
 //  msg.addr |= ext_flag & 0x0000FF00;
   ret = i2c_transfer(adap, &msg, 1);
@@ -94,8 +87,8 @@ int mt_i2c_test(int id, int addr)
   if(id >3)
     flag = I2C_DIRECTION_FLAG;
 
- // flag |= 0x80000000;
-  //ret = i2c_trans_data(id, addr,buffer,1,flag,200);
+  flag |= 0x80000000;
+  ret = i2c_trans_data(id, addr,buffer,1,flag,200);
   return ret;
 }
 EXPORT_SYMBOL(mt_i2c_test);
@@ -205,7 +198,6 @@ static ssize_t set_config(struct device *dev, struct device_attribute *attr, con
   void * vir_addr = NULL;
   //int status;
   int ret = 0;
-  int i=0;
 
   unsigned char tmpbuffer[128];
   printk("%s\n", buf);
@@ -217,10 +209,10 @@ static ssize_t set_config(struct device *dev, struct device_attribute *attr, con
         ext_flag |= I2C_WR_FLAG;
         number = (trans_auxlen << 8 ) | (length >> 1);
       } else if (operation == 1) {
-        //ext_flag |= 0x80000000;
+        ext_flag |= 0x80000000;
         number = (trans_num << 8 ) | (length >> 1);
       } else if (operation == 2) {
-        //ext_flag &= 0x7FFFFFFF;
+        ext_flag &= 0x7FFFFFFF;
         number = (trans_num << 8 ) | (length >> 1);
       } else {
 
@@ -303,18 +295,14 @@ static ssize_t set_config(struct device *dev, struct device_attribute *attr, con
 
       if ( trans_mode == 1 ){
         /*DMA*/
-        ret = i2c_trans_data(bus_id, address, (void *)dma_addr, number, ext_flag, timing,operation);
+        ret = i2c_trans_data(bus_id, address, (void *)dma_addr, number, ext_flag, timing);
       } else {
-        ret = i2c_trans_data(bus_id, address, vir_addr, number, ext_flag, timing,operation);
+        ret = i2c_trans_data(bus_id, address, vir_addr, number, ext_flag, timing);
       }
 
       //dealing
 
       if ( ret >= 0) {
-	  	  for(i=0;i<(length >> 1);i++)
-		  {
-		  	printk("fwq %x \n",*((char*)vir_addr+i));
-		  }
 
         if ( operation == 1 ) {
           hex2string(vir_addr, tmpbuffer, length >> 1);
