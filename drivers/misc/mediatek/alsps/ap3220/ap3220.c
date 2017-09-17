@@ -41,6 +41,19 @@
 #include "ap3220.h"
 //<Line> <add wakelock include> <20131113> <mickal.ma>
 #include <linux/wakelock.h>
+
+
+//LINE<JIRA_ID><DATE20131219><add PS Calibration>zenghaihui
+static int g_ps_cali_flag = 0;
+static int g_ps_base_value = 0;
+static int g_tp_tpye_checked = 0;
+extern char * synaptics_get_vendor_info(void);
+static void ap3220_ps_cali_tp_check(void);
+static void ap3220_ps_cali_set_threshold(void);
+static void ap3220_ps_cali_start(void);
+
+
+
 /******************************************************************************
  * configuration
 *******************************************************************************/
@@ -82,7 +95,6 @@ static struct i2c_board_info __initdata i2c_ap3220={ I2C_BOARD_INFO(AP3220_DEV_N
 
 //<Line> <add p-sensor wake_lock> <20131113> <mickal.ma>
 struct wake_lock psensor_timer_lock;
-
 struct ap3220_priv {
 	struct alsps_hw  *hw;
 	struct i2c_client *client;
@@ -1019,7 +1031,7 @@ static void ap3220_eint_work(struct work_struct *work)
 		sensor_data.status = SENSOR_STATUS_ACCURACY_MEDIUM;	
 
 	}
-	APS_LOG("AP3220_eint_work intr_flag = %x\n",intr_flag);	
+	APS_LOG("AP3220_eint_work intr_flag = %x\n",intr_flag);		
 	//<Begin> <fix problem when phone talking> <20131113> <mickal.ma>
 	if(intr_flag==1)//far away
 		wake_lock_timeout(&psensor_timer_lock, 1*HZ);
@@ -1089,6 +1101,287 @@ static int ap3220_release(struct inode *inode, struct file *file)
 	file->private_data = NULL;
 	return 0;
 }
+
+
+//LINE<JIRA_ID><DATE20131219><add PS Calibration>zenghaihui
+static void ap3220_ps_cali_tp_check(void)
+{
+#if 0
+    u8 data, data2, data3;
+    int res =0;
+    char *product_id = NULL;
+
+    if(g_tp_tpye_checked)
+    {
+        APS_LOG("ap3220_ps_tp_check tp already checked \n");
+        return;
+    }
+    
+    product_id = synaptics_get_vendor_info();
+    
+    APS_LOG("ap3220_ps_tp_check product_id = %s \n", product_id);
+    
+    if( 0 == memcmp(product_id, "JTOUCH", 6))
+    {
+        //PS LED Control
+        data = (AP3220_PS_SETTING_LED_PULSE_2<< AP3220_PS_LED_PULSE_SHIFT) & AP3220_PS_LED_PULSE_MASK;
+        data2 = (AP3220_PS_SETTING_LED_RATIO_16 << AP3220_PS_LED_RATIO_SHIFT) & AP3220_PS_LED_RATIO_MASK;
+        data |= data2;
+        res = ap3220_i2c_write_reg(AP3220_REG_PS_LED,data);
+        
+        if(res < 0)
+        {
+            APS_LOG("i2c_master_send function err in ap3220_jtouch_white_tp_threshold_reset\n");
+        }
+        
+        mdelay(50);
+    }
+
+    g_tp_tpye_checked = 1;
+#endif    
+}
+
+static void ap3220_ps_cali_set_threshold(void)
+{
+	u8 data, data2, data3;
+	u16 value_high,value_low;
+	int res =0;
+
+    struct alsps_hw *hw = get_cust_alsps_hw();
+
+    APS_LOG("ap3220_ps_cali_set_threshold:g_ps_base_value=%x, hw->ps_threshold_high=%x,hw->ps_threshold_low=%x \n",
+        g_ps_base_value, hw->ps_threshold_high, hw->ps_threshold_low);
+    
+    value_high= g_ps_base_value + hw->ps_threshold_high;
+    value_low= g_ps_base_value + hw->ps_threshold_low;
+
+    
+    if( value_high > 0x3f0)
+    {
+        value_high= 0x3f0;
+        value_low= 0x3e0;
+        APS_LOG("ap3220_ps_cali_set_threshold: set value_high=0x3f0,value_low=0x3e0, please check the phone \n");
+    }
+    
+
+        
+	atomic_set(&ap3220_obj->ps_thd_val_high, value_high);
+	atomic_set(&ap3220_obj->ps_thd_val_low,  value_low);
+
+
+	res = ap3220_i2c_write_reg(0x2A,value_low&0x0003);
+	res = ap3220_i2c_write_reg(0x2B,(value_low>>2)&0x00ff);
+	res = ap3220_i2c_write_reg(0x2C,value_high&0x0003);
+	res = ap3220_i2c_write_reg(0x2D,(value_high>>2)&0x00ff);
+
+	APS_LOG("ap3220_ps_cali_set_threshold:value_high=%x,value_low=%x! \n",value_high,value_low);
+}
+
+static void ap3220_ps_cali_start(void)
+{
+    long err = 0;
+    u16 			vl_read_ps = 0;
+    u16 			vl_ps_count = 0;
+    u16 			vl_ps_sun = 0;
+    u16 			vl_index = 0;
+    
+    
+
+    APS_LOG("entry ap3220_ps_cali_start \n");
+    
+    if(NULL == ap3220_obj->client)
+    {
+        APS_ERR("ap3220_obj->client == NULL\n"); 
+        return;
+    }
+
+    
+    //ap3220_ps_cali_tp_check();
+
+    // enable ps and backup reg data
+    /*
+    if((err = ap3220_enable_ps(ap3220_obj->client, 1)))
+    {
+        APS_ERR("enable ps fail: %ld\n", err); 
+        goto exit_handle;
+    }
+    mdelay(50);
+    */
+
+
+    // read ps
+    for(vl_index = 0; vl_index < 4; vl_index++)
+    {
+        if((err = ap3220_read_ps(ap3220_obj->client, &vl_read_ps)))
+        {
+            APS_ERR("enable ps fail: %ld\n", err); 
+            goto exit_handle;
+        }
+        
+        APS_LOG("vl_index=%d, vl_read_ps = %d \n",vl_index, vl_read_ps);
+
+        if(vl_index >=2)
+        {
+            vl_ps_sun += vl_read_ps;
+            
+            vl_ps_count ++;
+        }
+        
+        vl_read_ps = 0;
+        
+        mdelay(30);
+    }
+
+    g_ps_base_value = (vl_ps_sun/vl_ps_count);
+    g_ps_cali_flag = 1;
+    
+    APS_LOG("ap3220_ps_cali_start:g_ps_base_value=%x \n",g_ps_base_value);
+    
+    
+exit_handle:
+	APS_LOG("tag: exit_handle\n");
+    /*
+    if((err = ap3220_enable_ps(ap3220_obj->client, 0)))
+    {
+        APS_ERR("disable ps fail: %d\n", err); 
+    }
+    */
+    
+}
+
+
+//LINE<JIRA_ID><DATE20140217><wallpaper check for ms color>zenghaihui
+#ifdef TINNO_MS_COLOR_SELECT
+extern int phone_color_write_nvram(int *dat);
+extern int phone_color_read_nvram(int *dat);
+
+static int g_phone_color_data = 0;
+static int g_factory_reset_flag = 0;
+
+static ssize_t ap3220_show_phone_color(struct device_driver *ddri, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", g_phone_color_data);
+}
+/*----------------------------------------------------------------------------*/
+static ssize_t ap3220_store_phone_color(struct device_driver *ddri, const char *buf, size_t count)
+{
+    int phone_color, res;
+    int phone_color_nv_array[4];
+	
+	if(1 == sscanf(buf, "%d", &phone_color))
+	{
+		if(phone_color > 0 && phone_color < 8)
+		{
+		    g_phone_color_data = phone_color;
+            
+                // read ps cali nvram
+                //phone_color_read_nvram(&phone_color_nv_array);
+
+                //phone_color_nv_array[0]  --> ps cali data
+                //phone_color_nv_array[1]  --> ps cali data
+                
+                //phone_color_nv_array[2]  --> phone color data
+                //phone_color_nv_array[3]  --> factory reset flag
+                phone_color_nv_array[2] = phone_color;
+                //phone_color_write_nvram(&phone_color_nv_array);
+		}
+              else
+              {
+                  APS_ERR("invalid phone_color  =  \n", phone_color);
+              }
+	}
+	else 
+	{
+		APS_ERR("invalid enable content: '%s', length = %d\n", buf, count);
+	}
+	return count;    
+}
+static DRIVER_ATTR(phone_color,    0444, ap3220_show_phone_color, NULL);
+
+
+static ssize_t ap3220_show_factory_reset_flag(struct device_driver *ddri, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", g_factory_reset_flag);
+}
+/*----------------------------------------------------------------------------*/
+static ssize_t ap3220_store_factory_reset_flag(struct device_driver *ddri, const char *buf, size_t count)
+{
+    int vl_factory_reset_flag;
+    int phone_color_nv_array[4];
+	
+	if(1 == sscanf(buf, "%d", &vl_factory_reset_flag))
+	{
+	    g_factory_reset_flag = vl_factory_reset_flag;
+        
+            // read ps cali nvram
+            //phone_color_read_nvram(&phone_color_nv_array);
+
+            //phone_color_nv_array[0]  --> ps cali data
+            //phone_color_nv_array[1]  --> ps cali data
+            
+            //phone_color_nv_array[2]  --> phone color data
+            //phone_color_nv_array[3]  --> factory reset flag
+            phone_color_nv_array[3] = vl_factory_reset_flag;
+            //phone_color_write_nvram(&phone_color_nv_array);
+
+	}
+	else 
+	{
+		APS_ERR("invalid enable content: '%s', length = %d\n", buf, count);
+	}
+	return count;    
+}
+static DRIVER_ATTR(factory_reset_flag,    0444, ap3220_show_factory_reset_flag, NULL);
+/*----------------------------------------------------------------------------*/
+
+
+
+/*----------------------------------------------------------------------------*/
+static struct driver_attribute *ap3220_phone_color_attr_list[] = {
+    &driver_attr_phone_color,
+    &driver_attr_factory_reset_flag,
+};
+
+/*----------------------------------------------------------------------------*/
+static int ap3220_phone_color_create_attr(struct device_driver *driver) 
+{
+	int idx, err = 0;
+	int num = (int)(sizeof(ap3220_phone_color_attr_list)/sizeof(ap3220_phone_color_attr_list[0]));
+	if (driver == NULL)
+	{
+		return -EINVAL;
+	}
+
+	for(idx = 0; idx < num; idx++)
+	{
+		if((err = driver_create_file(driver, ap3220_phone_color_attr_list[idx])))
+		{            
+			APS_ERR("driver_create_file (%s) = %d\n", ap3220_phone_color_attr_list[idx]->attr.name, err);
+			break;
+		}
+	}    
+	return err;
+}
+/*----------------------------------------------------------------------------*/
+	static int ap3220_phone_color_delete_attr(struct device_driver *driver)
+	{
+	int idx ,err = 0;
+	int num = (int)(sizeof(ap3220_phone_color_attr_list)/sizeof(ap3220_phone_color_attr_list[0]));
+
+	if (!driver)
+	return -EINVAL;
+
+	for (idx = 0; idx < num; idx++) 
+	{
+		driver_remove_file(driver, ap3220_phone_color_attr_list[idx]);
+	}
+	
+	return err;
+}
+#endif
+
+
+
 /************************************************************/
 static long ap3220_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -1099,7 +1392,17 @@ static long ap3220_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned 
 		int dat;
 		uint32_t enable;
 		int ps_result;
-		
+		static int factory_status = 0; //LINE<20130718><for ftm>wangyanhui
+
+            //LINE<JIRA_ID><DATE20131219><add PS Calibration>zenghaihui        
+            int ps_cali_data[2] = {0x00};
+            
+//LINE<JIRA_ID><DATE20140217><wallpaper check for ms color>zenghaihui
+#ifdef TINNO_MS_COLOR_SELECT
+            int phone_color_data[2] = {0x00};
+#endif            
+        
+        
 		switch (cmd)
 		{
 			case ALSPS_SET_PS_MODE:
@@ -1159,17 +1462,22 @@ static long ap3220_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned 
 				}
 				
 				dat = obj->ps;
-			    #if 1
+				
+                            //BEGIN<20130718><for ftm>wangyanhui
                             //LINE<JIRA_ID><DATE20130115><for ftm>zenghaihui
                             if(obj->ps > atomic_read(&obj->ps_thd_val_high))
                             {
-                                dat = 0;  /*close*/
+                                //dat = 0;  /*close*/
+                                factory_status = 0;
                             }
-                            else
+                            else if(obj->ps < atomic_read(&obj->ps_thd_val_low))
                             {
-                                dat = 1;  /*far*/
+                                //dat = 1;  /*far*/
+                                factory_status =1;
                             }
-                            #endif
+                            dat = factory_status;
+                            //END<20130718><for ftm>wangyanhui	
+                            
 				if(copy_to_user(ptr, &dat, sizeof(dat)))
 				{
 					err = -EFAULT;
@@ -1259,8 +1567,157 @@ static long ap3220_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned 
 					goto err_out;
 				}			   
 				break;
+			/*case ALSPS_GET_PS_THRESHOLD_HIGH:
+				dat = atomic_read(&obj->ps_thd_val_high);
+				if(copy_to_user(ptr, &dat, sizeof(dat)))
+				{
+					err = -EFAULT;
+					goto err_out;
+				}		    
+			    break;
+			case ALSPS_GET_PS_THRESHOLD_LOW:
+				dat = atomic_read(&obj->ps_thd_val_low);
+				if(copy_to_user(ptr, &dat, sizeof(dat)))
+				{
+					err = -EFAULT;
+					goto err_out;
+				}   			    
+			    break;*/
 			/*------------------------------------------------------------------------------------------*/
 			
+			/*------------------------------------------------------------------------------------------*/
+
+            //LINE<JIRA_ID><DATE20131218><add PS Calibration>zenghaihui
+            case ALSPS_IOCTL_PS_CALI_START:
+                APS_LOG("case ALSPS_IOCTL_PS_CALI_START: \n");
+                
+                ap3220_ps_cali_start();
+                
+                if (ptr == NULL) {
+                    APS_ERR("%s ptr == NULL", __FUNCTION__);
+                    err = -EINVAL;
+                    break;
+                }
+                
+                ps_cali_data[0] = g_ps_cali_flag;
+                ps_cali_data[1] = g_ps_base_value;
+                
+                APS_LOG("g_ps_cali_flag = %x, g_ps_base_value = %x \n", g_ps_cali_flag, g_ps_base_value);
+                
+                if (copy_to_user(ptr, ps_cali_data, sizeof(ps_cali_data))) {
+                    APS_ERR("%s copy_from_user error", __FUNCTION__);
+                    err = -EFAULT;
+                    break;
+                }
+                break;
+
+            case ALSPS_IOCTL_PS_SET_CALI:
+                APS_LOG("case ALSPS_IOCTL_PS_SET_CALI: \n");
+                
+                if (ptr == NULL) {
+                    APS_ERR("%s ptr == NULL", __FUNCTION__);
+                    err = -EINVAL;
+                    break;
+                }
+                
+                if (copy_from_user(&ps_cali_data, ptr, sizeof(ps_cali_data))) {
+                    APS_ERR("%s copy_from_user error", __FUNCTION__);
+                    err = -EFAULT;
+                    break;
+                }
+
+                g_ps_cali_flag = ps_cali_data[0];
+                g_ps_base_value = ps_cali_data[1];
+
+                if(!g_ps_cali_flag)
+                {
+                    g_ps_base_value = 0x30; // set default base value
+                    APS_LOG("not calibration!!! set g_ps_base_value = 0x80 \n");
+                }
+                
+                APS_LOG("g_ps_cali_flag = %x, g_ps_base_value = %x \n", g_ps_cali_flag, g_ps_base_value);
+
+                ap3220_ps_cali_set_threshold();
+                
+                break;
+
+            case ALSPS_IOCTL_PS_GET_CALI:
+                APS_LOG("case ALSPS_IOCTL_PS_GET_CALI: \n");
+                
+                if (ptr == NULL) {
+                    APS_ERR("%s ptr == NULL", __FUNCTION__);
+                    err = -EINVAL;
+                    break;
+                }
+                
+                ps_cali_data[0] = g_ps_cali_flag;
+                ps_cali_data[1] = g_ps_base_value;
+                
+                APS_LOG("g_ps_cali_flag = %x, g_ps_base_value = %x \n", g_ps_cali_flag, g_ps_base_value);
+                
+                if (copy_to_user(ptr, ps_cali_data, sizeof(ps_cali_data))) {
+                    APS_ERR("%s copy_to_user error", __FUNCTION__);
+                    err = -EFAULT;
+                    break;
+                }
+                break;
+
+            case ALSPS_IOCTL_PS_CLR_CALI:
+                APS_LOG("case ALSPS_IOCTL_PS_CLR_CALI: \n");
+                g_ps_cali_flag = 0;
+                g_ps_base_value = 0;
+                ap3220_ps_cali_set_threshold();
+                break;
+                
+            case ALSPS_IOCTL_PS_CALI_RAW_DATA:    
+                if((err = ap3220_read_ps(obj->client, &obj->ps)))
+                {
+                    goto err_out;
+                }
+                
+                dat = obj->ps;
+                            
+                if(copy_to_user(ptr, &dat, sizeof(dat)))
+                {
+                    err = -EFAULT;
+                    goto err_out;
+                }  
+                break;            
+
+
+        
+//LINE<JIRA_ID><DATE20140217><wallpaper check for ms color>zenghaihui
+#ifdef TINNO_MS_COLOR_SELECT
+        case ALSPS_IOCTL_PHONE_COLOR_SET_CALI:
+            APS_LOG("case ALSPS_IOCTL_PHONE_COLOR_SET_CALI: \n");
+            
+            if (ptr == NULL) {
+                APS_ERR("%s ptr == NULL", __FUNCTION__);
+                err = -EINVAL;
+                break;
+            }
+            
+            if (copy_from_user(&phone_color_data, ptr, sizeof(phone_color_data))) {
+                APS_ERR("%s copy_from_user error", __FUNCTION__);
+                err = -EFAULT;
+                break;
+            }
+        
+            g_phone_color_data = phone_color_data[0];
+            g_factory_reset_flag = phone_color_data[1];
+        
+            
+            APS_LOG("g_phone_color_data = %x, g_factory_reset_flag = %x \n", g_phone_color_data, g_factory_reset_flag);
+        
+            if((err = ap3220_phone_color_create_attr(&ap3220_alsps_driver.driver)))
+            {
+                APS_ERR("create attribute err = %d\n", err);
+                goto err_out;
+            }
+            
+            break;
+#endif            
+        
 			default:
 				APS_ERR("%s not supported = 0x%04x", __FUNCTION__, cmd);
 				err = -ENOIOCTLCMD;
@@ -1412,7 +1869,7 @@ static int ap3220_init_client(struct i2c_client *client)
 	}
 //PS LED Control
 	data = (AP3220_PS_SETTING_LED_PULSE_2<< AP3220_PS_LED_PULSE_SHIFT) & AP3220_PS_LED_PULSE_MASK;
-	data2 = (AP3220_PS_SETTING_LED_RATIO_100 << AP3220_PS_LED_RATIO_SHIFT) & AP3220_PS_LED_RATIO_MASK;
+	data2 = (AP3220_PS_SETTING_LED_RATIO_16 << AP3220_PS_LED_RATIO_SHIFT) & AP3220_PS_LED_RATIO_MASK;
 	data |= data2;
 	res = ap3220_i2c_write_reg(AP3220_REG_PS_LED,data);
 	if(res < 0)
@@ -1531,7 +1988,8 @@ long ap3220_ps_operate(void* self, uint32_t command, void* buff_in, int size_in,
 		long err = 0;
 		int value;
 		hwm_sensor_data* sensor_data;
-		struct ap3220_priv *obj = (struct ap3220_priv *)self;		
+		struct ap3220_priv *obj = (struct ap3220_priv *)self;
+
 		APS_FUN(f);
 		switch (command)
 		{
@@ -1813,6 +2271,19 @@ static int ap3220_i2c_probe(struct i2c_client *client, const struct i2c_device_i
 static int ap3220_i2c_remove(struct i2c_client *client)
 {
 	int err;	
+    
+    
+//LINE<JIRA_ID><DATE20140217><wallpaper check for ms color>zenghaihui
+#ifdef TINNO_MS_COLOR_SELECT
+    //LINE<JIRA_ID><DATE20140217><wallpaper check for ms color>zenghaihui
+	/*------------------------ap3220 attribute file for debug--------------------------------------*/	
+	if((err = ap3220_phone_color_delete_attr(&ap3220_alsps_driver.driver)))
+	{
+		APS_ERR("ltr501_delete_attr fail: %d\n", err);
+	} 
+	/*----------------------------------------------------------------------------------------*/
+#endif            
+        
 	/*------------------------ap3220 attribute file for debug--------------------------------------*/	
 	if((err = ap3220_delete_attr(&ap3220_i2c_driver.driver)))
 	{

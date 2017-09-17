@@ -95,9 +95,10 @@
 *
 ********************************************************************************/
 /* SENSOR CHIP VERSION */
-#define IMX179_SENSOR_ID                        0x0179
-#define IMX178_SENSOR_ID                        0x0178
 #define OV2722MIPI_SENSOR_ID                    0x2722
+#define OV5645MIPI_SENSOR_ID                    0x5645
+#define IMX179_SENSOR_ID                        0x0179
+#define S5K4H5YX_SENSOR_ID            			    0x485b
 #define MC501CB_SENSOR_ID                       0x0062
 #define MC501CC_SENSOR_ID                       0x0074
 #define MC501CA_SENSOR_ID                       0x0011
@@ -158,15 +159,15 @@
 #define HI542MIPI_SENSOR_ID                     0x00B1
 #define OV5647MIPI_SENSOR_ID                    0x5647
 #define OV8825_SENSOR_ID                        0x8825
+#define OV8826_SENSOR_ID                        0x8827//LINE <> <DATE20130408> <add sensor:sunny ov8825 MTM> wupingzhou
 #define OV12830_SENSOR_ID                       0xC830
 #define OV5648MIPI_SENSOR_ID                    0x5648
 #define OV5649MIPI_SENSOR_ID                    0x5649        //darling ov5648 
 #define OV5693_SENSOR_ID                        0x5690       // truly ov5648 
 #define OV5648MIPI_SENSOR_ID_SUNWIN                    0x5650//sunwin ov5648 
 #define OV5648MIPI_SENSOR_ID_DARLING_ZL                    0x5652//sunwin ov5648 
-#define OV5670MIPI_SENSOR_ID                    0x5670
-#define OV5693_SENSOR_ID                        0x5690
-#define OV13850_SENSOR_ID			  0xD850
+//LINE <> <20130716> <add the ov8850 driver> panzaoyan
+#define OV8850_SENSOR_ID                    0x8850 
 
 //guomingyi 20141115add for ov2680 start. 
 
@@ -230,6 +231,7 @@
 #define HI259_SENSOR_ID                         0x00d2  //add sensor hi258
 #define HIVICF_SENSOR_ID                        0x0081
 #define HI253_SENSOR_ID                         0x0092
+#define HI256_MIPI_YUV_SENSOR_ID                0x00C0	//Line added by mickal.ma
 #define HI704_SENSOR_ID                         0x0096
 
 #define IMX058_SENSOR_ID                        0x0058
@@ -252,6 +254,7 @@
 #define A5141MIPI_SENSOR_ID                     0x4800
 #define SP0A19_YUV_SENSOR_ID				0xA6
 #define A5142MIPI_SENSOR_ID                     0x4800
+#define OV8835MIPI_SENSOR_ID			  	0x8830
 #define GC0313MIPI_YUV_SENSOR_ID                0xD0
 #define IMX219_SENSOR_ID            			0x0219//0x0119//
 #define IMX135_SENSOR_ID                        0x0135
@@ -300,8 +303,9 @@
 #define CAMERA_HW_DEVNAME            "kd_camera_hw"
 
 /* SENSOR DEVICE DRIVER NAME */
+#define SENSOR_DRVNAME_OV5645_MIPI_YUV   "ov5645_mipi_yuv"
 #define SENSOR_DRVNAME_IMX179_MIPI_RAW   "imx179mipiraw"
-#define SENSOR_DRVNAME_IMX178_MIPI_RAW   "imx178mipiraw"
+#define SENSOR_DRVNAME_S5K4H5YX_MIPI_RAW   "s5k4h5yxmipiraw"
 #define SENSOR_DRVNAME_OV2722_MIPI_RAW  "ov2722mipiraw"
 #define SENSOR_DRVNAME_MT9P012_RAW  "mt9p012"
 #define SENSOR_DRVNAME_MT9P015_RAW  "mt9p015"
@@ -318,19 +322,25 @@
 #define SENSOR_DRVNAME_OV5642_RAW   "ov5642raw"
 #define SENSOR_DRVNAME_HI542_RAW   "hi542raw"
 #define SENSOR_DRVNAME_HI542MIPI_RAW   "hi542mipiraw"
+#define SENSOR_DRVNAME_HI258_MIPI_YUV_CMK    	"hi258mipiyuv_cmk" //LINE<><20140111><add sensor driver>wangyanhui
+#define SENSOR_DRVNAME_HI258_MIPI_YUV_SW    	"hi258mipiyuv_sw" //LINE<><20140111><add sensor driver>wangyanhui
 
 #define SENSOR_DRVNAME_OV5647MIPI_RAW   	"ov5647mipiraw"
 #define SENSOR_DRVNAME_HM3451_RAW				"hm3451raw"
 
 #define SENSOR_DRVNAME_OV5647_RAW   	"ov5647"
-#define SENSOR_DRVNAME_OV5648_MIPI_RAW   		"ov5648mipi"
+#define SENSOR_DRVNAME_OV5648_MIPI_RAW   	"ov5648mipi_truly"
+#define SENSOR_DRVNAME_OV5649_MIPI_RAW   	"ov5648mipi_darling"
 #define SENSOR_DRVNAME_OV5648_MIPI_RAW_TRULY   		"ov5648mipi_truly"  //jzw add begin
 #define SENSOR_DRVNAME_OV5648_MIPI_RAW_DARLING   	"ov5648mipi_darling" 
+#define SENSOR_DRVNAME_OV5693_MIPI_RAW     "ov5693mipi"
+#define SENSOR_DRVNAME_OV5649_MIPI_RAW   	"ov5648mipi_darling"
 #define SENSOR_DRVNAME_OV5648_MIPI_RAW_SUNWIN 		"ov5648mipi_sunwin" 
 #define SENSOR_DRVNAME_OV5648_MIPI_RAW_DARLING_ZL   	"ov5648mipi_darling_zl" //jzw add end
 
-//#define SENSOR_DRVNAME_OV5670_MIPI_RAW   	"ov5670mipi"
-#define SENSOR_DRVNAME_OV5693_MIPI_RAW     "ov5693mipi"
+#define SENSOR_DRVNAME_OV8850_MIPI_RAW       "ov8850_mipi_raw"  //LINE <> <20130716> <add the ov8850 driver> panzaoyan
+#define SENSOR_DRVNAME_IMX111_MIPI_RAW   	"imx111_mipi_raw" //LINE <> <20130712> <add the imx111 driver> panzaoyan
+#define SENSOR_DRVNAME_IMX111_MIPI_DARLING   	"imx111_mipi_darling" //LINE <> <20131021> <add the imx111 darling driver> panzaoyan
 #define SENSOR_DRVNAME_OV5642_MIPI_YUV    "ov5642mipiyuv"
 #define SENSOR_DRVNAME_OV5642_MIPI_RGB    "ov5642mipirgb"
 #define SENSOR_DRVNAME_OV5642_MIPI_JPG     "ov5642mipijpg"
@@ -343,8 +353,7 @@
 #define SENSOR_DRVNAME_SIV120B_YUV    "siv120byuv"
 #define SENSOR_DRVNAME_MT9V113_YUV    "mt9v113yuv"
 #define SENSOR_DRVNAME_HI253_YUV    	"hi253yuv"
-#define SENSOR_DRVNAME_HI258_MIPI_YUV_CMK    	"hi258mipiyuv_cmk" //jzw add 
-#define SENSOR_DRVNAME_HI258_MIPI_YUV_SW    	"hi258mipiyuv_sw" //jzw add
+#define SENSOR_DRVNAME_HI256_MIPI_YUV    	"hi256mipiyuv"	//Line added by mickal.ma
 #define SENSOR_DRVNAME_SIV121D_YUV    	"siv121dyuv"
 #define SENSOR_DRVNAME_HI704_YUV    	"hi704yuv"
 #define SENSOR_DRVNAME_MT9V114_YUV    "mt9v114"
@@ -366,6 +375,8 @@
 #define SENSOR_DRVNAME_S5K8AAYX_YUV          "s5k8aayxyuv"
 
 #define SENSOR_DRVNAME_S5K3H7Y_MIPI_RAW   "s5k3h7ymipiraw"
+#define SENSOR_DRVNAME_OV8825_MIPI_RAW   "ov8825_sunny_MTM"
+#define SENSOR_DRVNAME_OV8826_MIPI_RAW   "ov8825_darling"//LINE <> <DATE20130408> <add sensor:sunny ov8825 MTM> wupingzhou
 #define SENSOR_DRVNAME_OV8825_MIPI_RAW   "ov8825mipiraw"
 #define SENSOR_DRVNAME_OV12830_MIPI_RAW   "ov12830mipiraw"
 #define SENSOR_DRVNAME_GC2035_YUV   "gc2035_yuv"

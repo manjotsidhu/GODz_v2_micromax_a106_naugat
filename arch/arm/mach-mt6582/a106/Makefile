@@ -19,18 +19,6 @@ endif
 ifeq ($(CONFIG_MTK_AKM09911),y)
 obj-y	+=  magnetometer/akm09911/
 endif
-
-ifeq ($(CONFIG_MTK_L3GD20),y)
-obj-y   +=  gyroscope/l3gd20/
-endif
-
-ifeq ($(CCONFIG_MTK_BMI058_AUTO),y)
-obj-y   +=  gyroscope/bmi058/
-endif
-
-ifeq ($(CONFIG_MTK_BMG160),y)
-obj-y   +=  gyroscope/bmg160/
-endif
 endif
 
 ifneq ($(CONFIG_ARCH_MTK_PROJECT),)

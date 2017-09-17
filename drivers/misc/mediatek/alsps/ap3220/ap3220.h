@@ -87,10 +87,10 @@
 #define AP3220_PS_GAIN_SHIFT		2
 #define AP3220_PS_PERSIST_MASK		0x03
 #define AP3220_PS_PERSIST_SHIFT		0x00
-#define AP3220_PS_GAIN_SHIFT		0//LINE<DATE2013123><screen cant resume on under sunshine>zhuxiankun
+//#define AP3220_PS_GAIN_SHIFT		0//LINE<DATE2013123><screen cant resume on under sunshine>zhuxiankun
 #define AP3220_PS_LED_PULSE_MASK	0x30
 #define AP3220_PS_LED_PULSE_SHIFT	4
-#define AP3220_PS_LED_RATIO_MASK	0x02
+#define AP3220_PS_LED_RATIO_MASK	0x03 //0x02
 #define AP3220_PS_LED_RATIO_SHIFT	0
 //PS Setting
 #define AP3220_PS_SETTING_INTG_TIME_1	0x00

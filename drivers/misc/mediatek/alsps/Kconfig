@@ -1,3 +1,4 @@
 config MTK_AP3220
 	bool "MTK_AP3220 for MediaTek package"
 	default n
+
