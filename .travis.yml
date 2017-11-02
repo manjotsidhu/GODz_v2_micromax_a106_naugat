@@ -5,7 +5,11 @@ language: c
 
 os:
   - linux
-
+  
+addons:
+  apt:
+    packages:
+      - curl
 
 #######################################################################################
 
@@ -23,11 +27,5 @@ before_install:
 script:  
   - ./build.sh 
 
-deploy:
-  provider: releases
-  user: $manjot_v1
-  password: $manjot_v2
-  file: "arch/arm/boot/zImage"
-  skip_cleanup: true
-  on:
-    tags: true
+after_success:
+  - curl --upload-file arch/arm/boot/zImage https://transfer.sh/kernel-manjot-${TRAVIS_CURRENT_DATE}.zip
