@@ -1,0 +1,33 @@
+language: c
+
+#######################################################################################
+
+
+os:
+  - linux
+
+
+#######################################################################################
+
+
+before_install:
+
+  - sudo apt-get update -qq
+  
+  # downloading the latest version of the linaro toolchain. 
+  - git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-eabi-4.8 ~/arm-eabi-4.8/
+
+#######################################################################################
+
+
+script:  
+  - ./build.sh 
+
+deploy:
+  provider: releases
+  user: $manjot_v1
+  password: $manjot_v2
+  file: "arch/arm/boot/zImage"
+  skip_cleanup: true
+  on:
+    tags: true
